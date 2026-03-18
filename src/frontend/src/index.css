@@ -1,0 +1,130 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0.13 0.012 240;
+    --foreground: 0.94 0.005 250;
+    --card: 0.16 0.015 240;
+    --card-foreground: 0.94 0.005 250;
+    --popover: 0.16 0.015 240;
+    --popover-foreground: 0.94 0.005 250;
+    --primary: 0.75 0.15 65;
+    --primary-foreground: 0.13 0.012 240;
+    --secondary: 0.19 0.018 240;
+    --secondary-foreground: 0.94 0.005 250;
+    --muted: 0.19 0.018 240;
+    --muted-foreground: 0.66 0.02 240;
+    --accent: 0.75 0.15 65;
+    --accent-foreground: 0.13 0.012 240;
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 0.94 0.005 250;
+    --success: 0.74 0.18 145;
+    --success-foreground: 0.13 0.012 240;
+    --border: 0.25 0.02 240;
+    --input: 0.25 0.02 240;
+    --ring: 0.75 0.15 65;
+    --radius: 0.75rem;
+    --chart-1: 0.75 0.15 65;
+    --chart-2: 0.74 0.18 145;
+    --chart-3: 0.66 0.18 220;
+    --chart-4: 0.55 0.22 25;
+    --chart-5: 0.62 0.2 310;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    background-color: oklch(0.13 0.012 240);
+    color: oklch(0.94 0.005 250);
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: oklch(0.13 0.012 240);
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.25 0.02 240);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.75 0.15 65);
+}
+
+/* Glow effect for cards */
+.card-glow {
+  box-shadow: 0 0 0 1px oklch(0.25 0.02 240), 0 4px 24px
+    oklch(0.13 0.012 240 / 0.8);
+}
+
+.card-glow-orange {
+  box-shadow: 0 0 0 1px oklch(0.75 0.15 65 / 0.3), 0 4px 24px
+    oklch(0.75 0.15 65 / 0.1);
+}
+
+.card-glow-green {
+  box-shadow: 0 0 0 1px oklch(0.74 0.18 145 / 0.3), 0 4px 24px
+    oklch(0.74 0.18 145 / 0.1);
+}
+
+/* Active nav underline */
+.nav-active {
+  color: oklch(0.75 0.15 65);
+  position: relative;
+}
+.nav-active::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: oklch(0.75 0.15 65);
+  border-radius: 1px;
+}
+
+/* Night city bg */
+.night-bg {
+  background-image: url("/assets/generated/sarthi-bg.dim_1920x1080.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.night-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: oklch(0.1 0.012 240 / 0.88);
+  z-index: 0;
+}
+
+/* Bar chart animation */
+@keyframes barGrow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.bar-animate {
+  animation: barGrow 0.6s ease-out forwards;
+  transform-origin: bottom;
+}
