@@ -14,7 +14,7 @@ import { RidesPage } from "./pages/RidesPage";
 type Page = "dashboard" | "rides" | "earnings" | "profile" | "help" | "admin";
 
 export default function App() {
-  const { isLoginSuccess, isInitializing } = useInternetIdentity();
+  const { identity, isInitializing } = useInternetIdentity();
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
 
   if (isInitializing) {
@@ -36,7 +36,8 @@ export default function App() {
     );
   }
 
-  if (!isLoginSuccess) {
+  // Show login page if no identity (not authenticated)
+  if (!identity) {
     return (
       <>
         <LoginPage />

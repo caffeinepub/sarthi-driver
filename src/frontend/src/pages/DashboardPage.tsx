@@ -27,86 +27,6 @@ import {
   useUpdateOnlineStatus,
 } from "../hooks/useQueries";
 
-// Sample ride requests for initial display
-const SAMPLE_RIDES = [
-  {
-    id: 1n,
-    passengerName: "Arjun Sharma",
-    pickupLocation: { area: "Connaught Place", city: "Delhi" },
-    dropLocation: { area: "Karol Bagh", city: "Delhi" },
-    fareAmount: 180,
-    distance: 7.2,
-    requestTime: BigInt(Date.now()) * 1000000n,
-    isAccepted: false,
-    driverId: {} as never,
-  },
-  {
-    id: 2n,
-    passengerName: "Priya Patel",
-    pickupLocation: { area: "Lajpat Nagar", city: "Delhi" },
-    dropLocation: { area: "Saket Metro", city: "Delhi" },
-    fareAmount: 220,
-    distance: 9.8,
-    requestTime: BigInt(Date.now()) * 1000000n,
-    isAccepted: false,
-    driverId: {} as never,
-  },
-];
-
-const SAMPLE_NOTIFICATIONS = [
-  {
-    id: 1,
-    message: "New ride request in your area!",
-    time: "2 min ago",
-    type: "ride",
-  },
-  {
-    id: 2,
-    message: "Payment of ₹340 credited to your account",
-    time: "1 hr ago",
-    type: "payment",
-  },
-  {
-    id: 3,
-    message: "You received a 5-star rating from Rahul K.",
-    time: "3 hr ago",
-    type: "rating",
-  },
-  {
-    id: 4,
-    message: "Surge pricing active in Gurugram — 1.8x",
-    time: "5 hr ago",
-    type: "surge",
-  },
-];
-
-const TRIP_HISTORY = [
-  {
-    id: 1,
-    passenger: "Rahul Kumar",
-    from: "Dwarka",
-    to: "IGI Airport",
-    fare: 450,
-    time: "9:30 AM",
-  },
-  {
-    id: 2,
-    passenger: "Sunita Verma",
-    from: "Rohini",
-    to: "Connaught Place",
-    fare: 310,
-    time: "11:15 AM",
-  },
-  {
-    id: 3,
-    passenger: "Mohit Jain",
-    from: "Laxmi Nagar",
-    to: "Noida Sec 18",
-    fare: 290,
-    time: "1:45 PM",
-  },
-];
-
 export function DashboardPage() {
   const { data: profile } = useGetProfile();
   const { data: earnings } = useGetEarnings();
@@ -115,65 +35,57 @@ export function DashboardPage() {
   const updateOnline = useUpdateOnlineStatus();
   const acceptRide = useAcceptRide();
 
-  const [isOnline, setIsOnline] = useState(profile?.isOnline ?? true);
+  const [isOnline, setIsOnline] = useState(profile?.isOnline ?? false);
   const [dismissedRides, setDismissedRides] = useState<Set<number>>(new Set());
 
   const handleToggleOnline = () => {
     const next = !isOnline;
     setIsOnline(next);
     updateOnline.mutate(next);
-    toast(next ? "You are now ONLINE" : "You are now OFFLINE", {
+    toast(next ? "Aap ab ONLINE hain" : "Aap ab OFFLINE hain", {
       icon: next ? "🟢" : "🔴",
     });
   };
 
   const handleAccept = (id: bigint) => {
     acceptRide.mutate(id, {
-      onSuccess: () => toast.success("Ride accepted! Navigating to pickup..."),
-      onError: () => toast.error("Could not accept ride. Try again."),
+      onSuccess: () =>
+        toast.success("Ride accept ki! Pickup ke liye ja rahe hain..."),
+      onError: () =>
+        toast.error("Ride accept nahi ho saki. Dobara try karein."),
     });
   };
 
-  const handleReject = (numId: number) => {
-    setDismissedRides((prev) => new Set([...prev, numId]));
-    toast("Ride request dismissed");
+  const handleReject = (idx: number): void => {
+    setDismissedRides((prev) => new Set([...prev, idx]));
+    toast("Ride request dismiss ki");
   };
 
-  // Use backend data or fall back to sample data
-  const rides =
-    pendingRides && pendingRides.length > 0
-      ? pendingRides.map((r, i) => ({ ...r, id: BigInt(i) }))
-      : SAMPLE_RIDES;
+  const rides = (pendingRides ?? [])
+    .map((r, i) => ({ ...r, _idx: i }))
+    .filter((r) => !dismissedRides.has(r._idx));
+  const notifs = notifications ?? [];
 
-  const visibleRides = rides.filter((r) => !dismissedRides.has(Number(r.id)));
-  const notifs =
-    notifications && notifications.length > 0
-      ? notifications
-      : SAMPLE_NOTIFICATIONS.map((n) => ({
-          message: n.message,
-          timestamp: BigInt(0),
-        }));
-
-  const todayEarnings = earnings?.todayEarnings ?? 1840;
-  const totalTrips = Number(earnings?.totalTrips ?? 7);
-  const todayDistance = 62.4;
+  const todayEarnings = earnings?.todayEarnings ?? 0;
+  const totalTrips = Number(earnings?.totalTrips ?? 0);
+  const weeklyValues = earnings?.weeklyEarnings ?? [0, 0, 0, 0, 0, 0, 0];
 
   const statCards = [
     {
-      label: "Today's Earnings",
+      label: "Aaj Ki Kamai",
       value: `₹${todayEarnings.toLocaleString("en-IN")}`,
       icon: <IndianRupee size={18} />,
       color: "text-primary",
     },
     {
-      label: "Trips Today",
+      label: "Aaj Ke Trips",
       value: String(totalTrips),
       icon: <Navigation size={18} />,
       color: "text-success",
     },
     {
-      label: "Distance (km)",
-      value: `${todayDistance}`,
+      label: "Is Hafte Ki Kamai",
+      value: `₹${weeklyValues.reduce((a, b) => a + b, 0).toLocaleString("en-IN")}`,
       icon: <TrendingUp size={18} />,
       color: "text-chart-3",
     },
@@ -181,7 +93,6 @@ export function DashboardPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 py-6">
-      {/* Page title */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -191,14 +102,14 @@ export function DashboardPage() {
           Driver Dashboard
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Welcome back, {profile?.name ?? "Vikram Singh"} 👋
+          Welcome back, {profile?.name ?? "Driver"} 👋
         </p>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-5">
-        {/* ── LEFT COLUMN ── */}
+        {/* LEFT COLUMN */}
         <div className="space-y-4">
-          {/* Online status card */}
+          {/* Online status */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -227,10 +138,12 @@ export function DashboardPage() {
                 <p
                   className={`text-lg font-bold ${isOnline ? "text-success" : "text-muted-foreground"}`}
                 >
-                  {isOnline ? "You're Online" : "You're Offline"}
+                  {isOnline ? "Aap Online Hain" : "Aap Offline Hain"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {isOnline ? "Receiving ride requests" : "Toggle to go online"}
+                  {isOnline
+                    ? "Ride requests aa rahi hain"
+                    : "Online hone ke liye toggle karein"}
                 </p>
               </div>
               <Switch
@@ -282,52 +195,37 @@ export function DashboardPage() {
                 {notifs.length}
               </Badge>
             </div>
-            <div className="space-y-3">
-              {SAMPLE_NOTIFICATIONS.map((n) => (
-                <div
-                  key={n.id}
-                  className="flex gap-3 items-start"
-                  data-ocid={`notification.item.${n.id}`}
-                >
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs
-                    ${
-                      n.type === "ride"
-                        ? "bg-primary/20 text-primary"
-                        : n.type === "payment"
-                          ? "bg-success/20 text-success"
-                          : n.type === "rating"
-                            ? "bg-chart-3/20 text-chart-3"
-                            : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {n.type === "ride" ? (
-                      <Navigation size={12} />
-                    ) : n.type === "payment" ? (
-                      <IndianRupee size={12} />
-                    ) : n.type === "rating" ? (
-                      "★"
-                    ) : (
-                      <Zap size={12} />
-                    )}
+            {notifs.length === 0 ? (
+              <div className="text-center py-4">
+                <Bell
+                  size={24}
+                  className="mx-auto mb-2 text-muted-foreground opacity-30"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Abhi koi notification nahi
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {notifs.map((n) => (
+                  <div key={n.message} className="flex gap-3 items-start">
+                    <div className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0">
+                      <Bell size={12} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-foreground leading-snug">
+                        {n.message}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground leading-snug">
-                      {n.message}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {n.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </motion.div>
         </div>
 
-        {/* ── CENTER COLUMN ── */}
+        {/* CENTER COLUMN */}
         <div className="space-y-5">
-          {/* Ride requests */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -337,12 +235,14 @@ export function DashboardPage() {
               <h2 className="text-lg font-bold text-foreground">
                 Ride Requests
               </h2>
-              <Badge
-                className="bg-primary/20 text-primary border-primary/30 text-xs"
-                variant="outline"
-              >
-                <Zap size={10} className="mr-1" /> Live Today
-              </Badge>
+              {rides.length > 0 && (
+                <Badge
+                  className="bg-primary/20 text-primary border-primary/30 text-xs"
+                  variant="outline"
+                >
+                  <Zap size={10} className="mr-1" /> Live
+                </Badge>
+              )}
             </div>
 
             {!isOnline ? (
@@ -354,33 +254,30 @@ export function DashboardPage() {
                   <Navigation size={24} className="text-muted-foreground" />
                 </div>
                 <p className="text-muted-foreground text-sm">
-                  Go online to receive ride requests
+                  Ride requests pane ke liye online ho jayein
                 </p>
               </div>
-            ) : visibleRides.length === 0 ? (
+            ) : rides.length === 0 ? (
               <div
                 data-ocid="dashboard.rides.empty_state"
                 className="rounded-2xl border border-border bg-card p-10 text-center"
               >
                 <CheckCircle2 size={32} className="text-success mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  No pending ride requests right now
+                  Abhi koi ride request nahi hai
                 </p>
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-4">
-                {SAMPLE_RIDES.filter(
-                  (r) => !dismissedRides.has(r.id as unknown as number),
-                ).map((ride, i) => (
+                {rides.map((ride, i) => (
                   <motion.div
-                    key={Number(ride.id)}
+                    key={ride._idx}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.05 * i }}
                     data-ocid={`ride.item.${i + 1}`}
                     className="card-glow-orange rounded-2xl border border-primary/20 bg-card p-5 flex flex-col gap-4"
                   >
-                    {/* Rider info */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Avatar className="w-10 h-10">
@@ -396,7 +293,7 @@ export function DashboardPage() {
                             {ride.passengerName}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {ride.distance} km away
+                            {ride.distance} km
                           </p>
                         </div>
                       </div>
@@ -405,10 +302,8 @@ export function DashboardPage() {
                       </Badge>
                     </div>
 
-                    {/* Route map */}
                     <MapSvg className="w-full h-28 rounded-lg" animated />
 
-                    {/* Locations */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full bg-success flex-shrink-0" />
@@ -434,12 +329,11 @@ export function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex gap-2">
                       <Button
                         data-ocid={`ride.accept.button.${i + 1}`}
                         className="flex-1 bg-primary text-primary-foreground font-bold hover:bg-primary/90 h-9"
-                        onClick={() => handleAccept(ride.id)}
+                        onClick={() => handleAccept(ride.requestTime)}
                       >
                         <CheckCircle2 size={15} className="mr-1" /> ACCEPT
                       </Button>
@@ -447,7 +341,7 @@ export function DashboardPage() {
                         data-ocid={`ride.reject.button.${i + 1}`}
                         variant="outline"
                         className="flex-1 border-border text-muted-foreground hover:text-foreground h-9"
-                        onClick={() => handleReject(Number(ride.id))}
+                        onClick={() => handleReject(ride._idx)}
                       >
                         <XCircle size={15} className="mr-1" /> REJECT
                       </Button>
@@ -481,9 +375,9 @@ export function DashboardPage() {
           </motion.div>
         </div>
 
-        {/* ── RIGHT COLUMN ── */}
+        {/* RIGHT COLUMN */}
         <div className="space-y-4">
-          {/* Earnings summary */}
+          {/* Weekly earnings chart */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -493,31 +387,19 @@ export function DashboardPage() {
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-semibold text-foreground">
-                Earnings Summary
+                Weekly Kamai
               </span>
-              <span className="text-xs text-muted-foreground">This Week</span>
+              <span className="text-xs text-muted-foreground">Is Hafte</span>
             </div>
             <p className="text-3xl font-extrabold text-primary mb-4">
-              ₹
-              {(
-                earnings?.weeklyEarnings?.reduce((a, b) => a + b, 0) ?? 11240
-              ).toLocaleString("en-IN")}
+              ₹{weeklyValues.reduce((a, b) => a + b, 0).toLocaleString("en-IN")}
             </p>
-
-            {/* Bar chart */}
             <div className="flex items-end justify-between gap-1.5 h-28 mb-2">
               {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                 (day, i) => {
-                  const values = earnings?.weeklyEarnings ?? [
-                    1200, 1800, 980, 2100, 1640, 2200, 1320,
-                  ];
-                  const val = values[i] ?? 0;
-                  const max = Math.max(
-                    ...(earnings?.weeklyEarnings ?? [
-                      1200, 1800, 980, 2100, 1640, 2200, 1320,
-                    ]),
-                  );
-                  const pct = max > 0 ? (val / max) * 100 : 0;
+                  const val = weeklyValues[i] ?? 0;
+                  const max = Math.max(...weeklyValues, 1);
+                  const pct = (val / max) * 100;
                   const isToday = i === new Date().getDay() - 1;
                   return (
                     <div
@@ -529,10 +411,8 @@ export function DashboardPage() {
                         style={{ height: "88px" }}
                       >
                         <div
-                          className={`w-full rounded-t-md bar-animate ${
-                            isToday ? "bg-primary" : "bg-primary/40"
-                          }`}
-                          style={{ height: `${Math.max(pct, 8)}%` }}
+                          className={`w-full rounded-t-md bar-animate ${isToday ? "bg-primary" : "bg-primary/40"}`}
+                          style={{ height: `${Math.max(pct, 4)}%` }}
                           title={`₹${val}`}
                         />
                       </div>
@@ -546,7 +426,7 @@ export function DashboardPage() {
             </div>
           </motion.div>
 
-          {/* Trip history */}
+          {/* Recent trips */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -565,50 +445,25 @@ export function DashboardPage() {
                 Completed
               </Badge>
             </div>
-            <div className="space-y-3">
-              {TRIP_HISTORY.map((trip, i) => (
-                <div
-                  key={trip.id}
-                  className="flex items-center gap-3"
-                  data-ocid={`trip.item.${i + 1}`}
-                >
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback className="text-[10px] font-bold bg-secondary text-foreground">
-                      {trip.passenger
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">
-                      {trip.passenger}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground truncate">
-                      {trip.from} → {trip.to}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-primary">
-                      ₹{trip.fare}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {trip.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
+            <div className="text-center py-6">
+              <Navigation
+                size={28}
+                className="mx-auto mb-2 text-muted-foreground opacity-30"
+              />
+              <p className="text-xs text-muted-foreground">
+                Abhi koi completed trip nahi
+              </p>
             </div>
             <button
               type="button"
               data-ocid="dashboard.viewall.link"
-              className="mt-4 w-full text-xs text-primary flex items-center justify-center gap-1 hover:underline"
+              className="mt-2 w-full text-xs text-primary flex items-center justify-center gap-1 hover:underline"
             >
-              View All Trips <ChevronRight size={12} />
+              Sab Trips Dekhein <ChevronRight size={12} />
             </button>
           </motion.div>
 
-          {/* Quick stats */}
+          {/* Performance */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -620,9 +475,16 @@ export function DashboardPage() {
             </p>
             <div className="space-y-3">
               {[
-                { label: "Acceptance Rate", value: "87%", good: true },
-                { label: "Completion Rate", value: "94%", good: true },
-                { label: "Cancellation Rate", value: "6%", good: false },
+                {
+                  label: "Acceptance Rate",
+                  value: totalTrips > 0 ? "--" : "--",
+                  good: true,
+                },
+                {
+                  label: "Completion Rate",
+                  value: totalTrips > 0 ? "--" : "--",
+                  good: true,
+                },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -631,9 +493,7 @@ export function DashboardPage() {
                   <span className="text-xs text-muted-foreground">
                     {item.label}
                   </span>
-                  <span
-                    className={`text-xs font-bold ${item.good ? "text-success" : "text-destructive"}`}
-                  >
+                  <span className="text-xs font-bold text-muted-foreground">
                     {item.value}
                   </span>
                 </div>
@@ -643,7 +503,7 @@ export function DashboardPage() {
                   Online Hours Today
                 </span>
                 <span className="text-xs font-bold text-foreground flex items-center gap-1">
-                  <Clock size={10} /> 6h 42m
+                  <Clock size={10} /> 0h 0m
                 </span>
               </div>
             </div>

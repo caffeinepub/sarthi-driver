@@ -126,6 +126,20 @@ export function useIsAdmin() {
   });
 }
 
+export function useClaimAdminRole() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (token: string) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).claimAdminRole(token);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["isAdmin"] });
+    },
+  });
+}
+
 export function useGetAllDrivers() {
   const { actor, isFetching } = useActor();
   return useQuery<Array<[Principal, DriverProfile]>>({

@@ -75,6 +75,13 @@ function assertProviderPresent(
   }
 }
 
+/** Detect if user is on a mobile device */
+function isMobileDevice(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent,
+  );
+}
+
 export const useInternetIdentity = (): InternetIdentityContext => {
   const context = useContext(InternetIdentityReactContext);
   assertProviderPresent(context);
@@ -88,6 +95,7 @@ export function InternetIdentityProvider({
   children: ReactNode;
   createOptions?: AuthClientCreateOptions;
 }>) {
+  // Use a ref so useEffect doesn't re-run when authClient changes
   const authClientRef = useRef<AuthClient | undefined>(undefined);
   const [identity, setIdentity] = useState<Identity | undefined>(undefined);
   const [loginStatus, setStatus] = useState<Status>("initializing");
@@ -98,40 +106,22 @@ export function InternetIdentityProvider({
     setError(new Error(message));
   }, []);
 
-  // Initialize once on mount - using ref avoids infinite re-render loop
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        setStatus("initializing");
-        const client = await createAuthClient(createOptions);
-        if (cancelled) return;
-        authClientRef.current = client;
-        const isAuthenticated = await client.isAuthenticated();
-        if (cancelled) return;
-        if (isAuthenticated) {
-          const loadedIdentity = client.getIdentity();
-          setIdentity(loadedIdentity);
-          setStatus("success");
-        } else {
-          setStatus("idle");
-        }
-      } catch (unknownError) {
-        if (!cancelled) {
-          setStatus("loginError");
-          setError(
-            unknownError instanceof Error
-              ? unknownError
-              : new Error("Initialization failed"),
-          );
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const handleLoginSuccess = useCallback(() => {
+    const latestIdentity = authClientRef.current?.getIdentity();
+    if (!latestIdentity) {
+      setErrorMessage("Identity not found after successful login");
+      return;
+    }
+    setIdentity(latestIdentity);
+    setStatus("success");
+  }, [setErrorMessage]);
+
+  const handleLoginError = useCallback(
+    (maybeError?: string) => {
+      setErrorMessage(maybeError ?? "Login failed");
+    },
+    [setErrorMessage],
+  );
 
   const login = useCallback(() => {
     const authClient = authClientRef.current;
@@ -146,31 +136,28 @@ export function InternetIdentityProvider({
       currentIdentity instanceof DelegationIdentity &&
       isDelegationValid(currentIdentity.getDelegation())
     ) {
-      setIdentity(currentIdentity);
-      setStatus("success");
+      handleLoginSuccess();
       return;
     }
 
+    // On mobile use full-screen tab style instead of small popup
+    // This avoids "Unable to connect" postMessage failures on mobile browsers
+    const windowFeatures = isMobileDevice()
+      ? "toolbar=yes,scrollbars=yes,status=yes,resizable=yes,location=yes"
+      : undefined;
+
     const options: AuthClientLoginOptions = {
       identityProvider: DEFAULT_IDENTITY_PROVIDER,
-      onSuccess: () => {
-        const latestIdentity = authClientRef.current?.getIdentity();
-        if (!latestIdentity) {
-          setErrorMessage("Identity not found after successful login");
-          return;
-        }
-        setIdentity(latestIdentity);
-        setStatus("success");
-      },
-      onError: (maybeError?: string) => {
-        setErrorMessage(maybeError ?? "Login failed");
-      },
+      onSuccess: handleLoginSuccess,
+      onError: handleLoginError,
       maxTimeToLive: ONE_HOUR_IN_NANOSECONDS * BigInt(24 * 30),
+      windowOpenerFeatures: windowFeatures,
+      allowPinAuthentication: true,
     };
 
     setStatus("logging-in");
     void authClient.login(options);
-  }, [setErrorMessage]);
+  }, [handleLoginError, handleLoginSuccess, setErrorMessage]);
 
   const clear = useCallback(() => {
     const authClient = authClientRef.current;
@@ -178,11 +165,9 @@ export function InternetIdentityProvider({
       setErrorMessage("Auth client not initialized");
       return;
     }
-
     void authClient
       .logout()
       .then(() => {
-        authClientRef.current = undefined;
         setIdentity(undefined);
         setStatus("idle");
         setError(undefined);
@@ -197,6 +182,38 @@ export function InternetIdentityProvider({
       });
   }, [setErrorMessage]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        setStatus("initializing");
+        const client = await createAuthClient(createOptions);
+        if (cancelled) return;
+        authClientRef.current = client;
+        const isAuthenticated = await client.isAuthenticated();
+        if (cancelled) return;
+        if (isAuthenticated) {
+          setIdentity(client.getIdentity());
+        }
+      } catch (unknownError) {
+        if (!cancelled) {
+          setStatus("loginError");
+          setError(
+            unknownError instanceof Error
+              ? unknownError
+              : new Error("Initialization failed"),
+          );
+        }
+      } finally {
+        if (!cancelled) setStatus("idle");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const value = useMemo<ProviderValue>(
     () => ({
       identity,
@@ -206,9 +223,7 @@ export function InternetIdentityProvider({
       isInitializing: loginStatus === "initializing",
       isLoginIdle: loginStatus === "idle",
       isLoggingIn: loginStatus === "logging-in",
-      isLoginSuccess:
-        loginStatus === "success" ||
-        (loginStatus !== "initializing" && identity !== undefined),
+      isLoginSuccess: loginStatus === "success",
       isLoginError: loginStatus === "loginError",
       loginError,
     }),

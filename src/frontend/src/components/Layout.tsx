@@ -76,14 +76,16 @@ export function Layout({ children, currentPage, onNavigate }: LayoutProps) {
     (item) => !item.adminOnly || isAdmin === true,
   );
 
-  const driverName = profile?.name ?? "Vikram Singh";
-  const driverRating = profile?.rating ?? 4.5;
-  const initials = driverName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const driverName = profile?.name || "Driver";
+  const driverRating = profile?.rating;
+  const initials = profile?.name
+    ? profile.name
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "DR";
 
   return (
     <div className="min-h-screen flex flex-col relative">
@@ -167,10 +169,12 @@ export function Layout({ children, currentPage, onNavigate }: LayoutProps) {
                     <span className="text-xs font-semibold text-foreground leading-tight">
                       {driverName}
                     </span>
-                    <span className="text-xs text-primary flex items-center gap-0.5">
-                      <Star size={9} fill="currentColor" />
-                      {driverRating.toFixed(1)}
-                    </span>
+                    {driverRating != null && (
+                      <span className="text-xs text-primary flex items-center gap-0.5">
+                        <Star size={9} fill="currentColor" />
+                        {driverRating.toFixed(1)}
+                      </span>
+                    )}
                   </div>
                   <ChevronDown size={14} className="text-muted-foreground" />
                 </button>

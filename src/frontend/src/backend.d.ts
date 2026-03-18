@@ -48,6 +48,7 @@ export interface backendInterface {
     acceptRide(rideId: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     cancelTrip(tripId: bigint): Promise<void>;
+    claimAdminRole(token: string): Promise<boolean>;
     completeTrip(tripId: bigint): Promise<void>;
     createProfile(name: string, vehicleType: string, phoneNumber: string): Promise<void>;
     createRideRequest(pickup: Location, drop: Location, fare: number, passenger: string, distance: number, driverId: Principal): Promise<bigint>;

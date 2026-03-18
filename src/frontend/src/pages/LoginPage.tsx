@@ -1,10 +1,20 @@
 import { Button } from "@/components/ui/button";
-import { Car, Loader2, Shield, Star, TrendingUp } from "lucide-react";
+import {
+  AlertCircle,
+  Car,
+  Loader2,
+  RefreshCw,
+  Shield,
+  Smartphone,
+  Star,
+  TrendingUp,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 export function LoginPage() {
-  const { login, isLoggingIn } = useInternetIdentity();
+  const { login, isLoggingIn, isLoginError, loginError } =
+    useInternetIdentity();
 
   const features = [
     {
@@ -28,6 +38,11 @@ export function LoginPage() {
       desc: "5-star service earns you more rides",
     },
   ];
+
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    );
 
   return (
     <div className="min-h-screen night-bg flex items-center justify-center p-4">
@@ -58,8 +73,8 @@ export function LoginPage() {
             <span className="text-primary block">Succeed.</span>
           </h2>
           <p className="text-muted-foreground text-lg mb-8 max-w-sm">
-            Join thousands of drivers earning ₹50,000+ monthly across India's
-            top cities.
+            Join thousands of drivers earning &#8377;50,000+ monthly across
+            India&apos;s top cities.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
@@ -89,7 +104,7 @@ export function LoginPage() {
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-primary">4.8★</p>
+              <p className="text-2xl font-bold text-primary">4.8&#9733;</p>
               <p className="text-xs text-muted-foreground">Avg Rating</p>
             </div>
             <div className="w-px h-8 bg-border" />
@@ -117,6 +132,57 @@ export function LoginPage() {
             </p>
           </div>
 
+          {/* Mobile tip */}
+          {isMobile && !isLoginError && (
+            <div className="w-full p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-start gap-2">
+              <Smartphone
+                size={16}
+                className="text-primary mt-0.5 flex-shrink-0"
+              />
+              <p className="text-xs text-muted-foreground">
+                <span className="text-primary font-semibold">Mobile tip:</span>{" "}
+                Login button dabane ke baad ek new tab khulegaa. Wahan apna
+                Internet Identity account select karein aur login complete
+                karein.
+              </p>
+            </div>
+          )}
+
+          {/* Error message */}
+          {isLoginError && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex flex-col gap-2"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle
+                  size={16}
+                  className="text-destructive flex-shrink-0"
+                />
+                <p className="text-sm font-semibold text-destructive">
+                  Login Nahi Hua
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {loginError?.message?.includes("Unable to connect") ||
+                loginError?.message?.includes("connect")
+                  ? "Internet Identity se connect nahi hua. Neeche steps follow karein:"
+                  : (loginError?.message ??
+                    "Login mein problem aayi. Dobara try karein.")}
+              </p>
+              {(loginError?.message?.includes("Unable to connect") ||
+                loginError?.message?.includes("connect")) && (
+                <ol className="text-xs text-muted-foreground list-decimal ml-4 space-y-1 mt-1">
+                  <li>Browser settings mein pop-up allow karein</li>
+                  <li>Chrome browser use karein (recommended)</li>
+                  <li>Incognito/Private mode try karein</li>
+                  <li>Neeche button se dobara try karein</li>
+                </ol>
+              )}
+            </motion.div>
+          )}
+
           <div className="w-full space-y-3">
             <Button
               data-ocid="login.primary_button"
@@ -126,8 +192,12 @@ export function LoginPage() {
             >
               {isLoggingIn ? (
                 <>
-                  <Loader2 size={18} className="mr-2 animate-spin" />{" "}
+                  <Loader2 size={18} className="mr-2 animate-spin" />
                   Connecting...
+                </>
+              ) : isLoginError ? (
+                <>
+                  <RefreshCw size={18} className="mr-2" /> Dobara Try Karein
                 </>
               ) : (
                 <>
