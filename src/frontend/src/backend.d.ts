@@ -11,6 +11,7 @@ export interface Location {
     area: string;
     city: string;
 }
+export type DriverStatus = { 'pending': null } | { 'approved': null } | { 'rejected': null };
 export interface DriverProfile {
     vehicleType: string;
     name: string;
@@ -18,6 +19,7 @@ export interface DriverProfile {
     rating: number;
     phoneNumber: string;
     totalRides: bigint;
+    status: DriverStatus;
 }
 export type Time = bigint;
 export interface Notification {
@@ -46,6 +48,7 @@ export enum UserRole {
 }
 export interface backendInterface {
     acceptRide(rideId: bigint): Promise<void>;
+    approveDriver(driverId: Principal): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     cancelTrip(tripId: bigint): Promise<void>;
     claimAdminRole(token: string): Promise<boolean>;
@@ -59,10 +62,12 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getEarnings(): Promise<EarningsSummary>;
     getNotifications(): Promise<Array<Notification>>;
+    getPendingDriverRegistrations(): Promise<Array<[Principal, DriverProfile]>>;
     getPendingRideRequests(): Promise<Array<RideRequest>>;
     getProfile(): Promise<DriverProfile | null>;
     getUserProfile(user: Principal): Promise<DriverProfile | null>;
     isCallerAdmin(): Promise<boolean>;
+    rejectDriver(driverId: Principal): Promise<void>;
     saveCallerUserProfile(profile: DriverProfile): Promise<void>;
     sendNotification(driverId: Principal, message: string): Promise<void>;
     updateOnlineStatus(isOnline: boolean): Promise<void>;

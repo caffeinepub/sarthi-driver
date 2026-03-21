@@ -4,6 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -14,13 +21,27 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Principal } from "@icp-sdk/core/principal";
-import { Loader2, Send, Shield, UserCheck, Users } from "lucide-react";
+import {
+  CheckCircle2,
+  Loader2,
+  Send,
+  Shield,
+  UserCheck,
+  UserPlus,
+  Users,
+  XCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  useAddDriverAsAdmin,
+  useApproveDriver,
   useCreateRideRequestAsAdmin,
+  useGetAllAdminAddedDrivers,
   useGetAllDrivers,
   useGetAllRideRequests,
+  useGetPendingDriverRegistrations,
+  useRejectDriver,
   useSendNotification,
 } from "../hooks/useQueries";
 
@@ -29,8 +50,15 @@ export function AdminPage() {
     useGetAllDrivers();
   const { data: allRides = [], isLoading: ridesLoading } =
     useGetAllRideRequests();
+  const { data: pendingDrivers = [], isLoading: pendingLoading } =
+    useGetPendingDriverRegistrations();
+  const { data: adminAddedDrivers = [], isLoading: adminDriversLoading } =
+    useGetAllAdminAddedDrivers();
   const createRide = useCreateRideRequestAsAdmin();
   const sendNotif = useSendNotification();
+  const approveDriver = useApproveDriver();
+  const rejectDriver = useRejectDriver();
+  const addDriverAsAdmin = useAddDriverAsAdmin();
 
   const [rideForm, setRideForm] = useState({
     passengerName: "",
@@ -45,10 +73,19 @@ export function AdminPage() {
 
   const [notifForm, setNotifForm] = useState({ driverId: "", message: "" });
 
+  const [addDriverForm, setAddDriverForm] = useState({
+    name: "",
+    phoneNumber: "",
+    vehicleType: "Sedan",
+  });
+
   const handleCreateRide = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const driverPrincipal = Principal.fromText(rideForm.driverId);
+      const driverId = rideForm.driverId.trim();
+      if (!driverId)
+        throw new Error("Driver ID required. Select a driver from the list.");
+      const driverPrincipal = Principal.fromText(driverId);
       await createRide.mutateAsync({
         pickup: { area: rideForm.pickupArea, city: rideForm.pickupCity },
         drop: { area: rideForm.dropArea, city: rideForm.dropCity },
@@ -78,7 +115,9 @@ export function AdminPage() {
   const handleSendNotif = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const driverPrincipal = Principal.fromText(notifForm.driverId);
+      const notifDriverId = notifForm.driverId.trim();
+      if (!notifDriverId) throw new Error("Driver ID required.");
+      const driverPrincipal = Principal.fromText(notifDriverId);
       await sendNotif.mutateAsync({
         driverId: driverPrincipal,
         message: notifForm.message,
@@ -92,10 +131,54 @@ export function AdminPage() {
     }
   };
 
+  const handleAddDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const generatedId = await addDriverAsAdmin.mutateAsync(addDriverForm);
+      toast.success(`Driver add ho gaya! ID: ${generatedId}`, {
+        duration: 6000,
+      });
+      setAddDriverForm({ name: "", phoneNumber: "", vehicleType: "Sedan" });
+    } catch (err) {
+      toast.error(
+        `Driver add nahi ho saka: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`,
+      );
+    }
+  };
+
+  const handleApprove = async (principal: Principal, name: string) => {
+    try {
+      await approveDriver.mutateAsync(principal);
+      toast.success(`${name || "Driver"} ko approve kar diya gaya!`);
+    } catch (err) {
+      toast.error(
+        `Approve nahi ho saka: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    }
+  };
+
+  const handleReject = async (principal: Principal, name: string) => {
+    try {
+      await rejectDriver.mutateAsync(principal);
+      toast.error(`${name || "Driver"} ki registration reject kar di gayi.`);
+    } catch (err) {
+      toast.error(
+        `Reject nahi ho saka: ${err instanceof Error ? err.message : "Unknown error"}`,
+      );
+    }
+  };
+
   const truncatePrincipal = (p: Principal) => {
     const str = p.toText();
     return str.length > 16 ? `${str.slice(0, 8)}...${str.slice(-6)}` : str;
   };
+
+  const driverOptions = allDrivers.map(([principal, driver]) => ({
+    value: principal.toText(),
+    label: `${driver.name || "Unnamed"} (${truncatePrincipal(principal)})`,
+  }));
 
   return (
     <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
@@ -112,8 +195,28 @@ export function AdminPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="trips" data-ocid="admin.tab">
-        <TabsList className="bg-secondary border border-border">
+      <Tabs defaultValue="registrations" data-ocid="admin.tab">
+        <TabsList className="bg-secondary border border-border flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger
+            value="registrations"
+            data-ocid="admin.registrations.tab"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative"
+          >
+            <UserCheck size={14} className="mr-1" />
+            Registration Requests
+            {pendingDrivers.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-bold">
+                {pendingDrivers.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="add-driver"
+            data-ocid="admin.add_driver.tab"
+            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            <UserPlus size={14} className="mr-1" /> Add Driver
+          </TabsTrigger>
           <TabsTrigger
             value="trips"
             data-ocid="admin.trips.tab"
@@ -136,6 +239,334 @@ export function AdminPage() {
             <Send size={14} className="mr-1" /> Notifications
           </TabsTrigger>
         </TabsList>
+
+        {/* REGISTRATION REQUESTS TAB */}
+        <TabsContent value="registrations" className="mt-4">
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <UserCheck size={15} className="text-primary" />
+                Pending Driver Registrations
+                {pendingDrivers.length > 0 && (
+                  <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 ml-1">
+                    {pendingDrivers.length} pending
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {pendingLoading ? (
+                <div
+                  data-ocid="admin.registrations.loading_state"
+                  className="flex items-center justify-center py-10"
+                >
+                  <Loader2 size={20} className="animate-spin text-primary" />
+                </div>
+              ) : pendingDrivers.length === 0 ? (
+                <div
+                  data-ocid="admin.registrations.empty_state"
+                  className="text-center py-12 text-muted-foreground text-sm"
+                >
+                  <UserCheck size={36} className="mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">
+                    Koi pending registration nahi hai
+                  </p>
+                  <p className="text-xs mt-1 opacity-60">
+                    Nayi driver registrations yahan dikhenge
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground text-xs">
+                          Driver
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs">
+                          Vehicle
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs">
+                          Phone
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs">
+                          Principal ID
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs text-center">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody data-ocid="admin.registrations.table">
+                      {pendingDrivers.map(([principal, driver], idx) => (
+                        <TableRow
+                          key={principal.toText()}
+                          data-ocid={`admin.registrations.item.${idx + 1}`}
+                          className="border-border hover:bg-secondary/50"
+                        >
+                          <TableCell>
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">
+                                {driver.name || "Unnamed Driver"}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className="mt-1 text-[10px] bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                              >
+                                Pending Approval
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {driver.vehicleType || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {driver.phoneNumber || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">
+                            {truncatePrincipal(principal)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-center gap-2">
+                              <Button
+                                data-ocid={`admin.registrations.approve.${idx + 1}`}
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-500 text-white h-8 px-3 gap-1"
+                                onClick={() =>
+                                  handleApprove(principal, driver.name)
+                                }
+                                disabled={
+                                  approveDriver.isPending ||
+                                  rejectDriver.isPending
+                                }
+                              >
+                                <CheckCircle2 size={13} />
+                                Approve
+                              </Button>
+                              <Button
+                                data-ocid={`admin.registrations.reject.${idx + 1}`}
+                                size="sm"
+                                variant="outline"
+                                className="border-red-500/40 text-red-400 hover:bg-red-500/10 h-8 px-3 gap-1"
+                                onClick={() =>
+                                  handleReject(principal, driver.name)
+                                }
+                                disabled={
+                                  approveDriver.isPending ||
+                                  rejectDriver.isPending
+                                }
+                              >
+                                <XCircle size={13} />
+                                Reject
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ADD DRIVER TAB */}
+        <TabsContent value="add-driver" className="space-y-6 mt-4">
+          <Card className="bg-card border-border card-glow max-w-lg">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <UserPlus size={15} className="text-primary" /> Driver Directly
+                Add Karein
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Driver ko add karne par automatically SARTHI ID generate hogi
+                (e.g. SARTHI000001)
+              </p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddDriver} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="add-driver-name"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Driver Ka Naam
+                  </Label>
+                  <Input
+                    id="add-driver-name"
+                    data-ocid="admin.add_driver.name.input"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={addDriverForm.name}
+                    onChange={(e) =>
+                      setAddDriverForm((p) => ({ ...p, name: e.target.value }))
+                    }
+                    required
+                    className="bg-secondary border-border"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="add-driver-phone"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Phone Number
+                  </Label>
+                  <Input
+                    id="add-driver-phone"
+                    data-ocid="admin.add_driver.phone.input"
+                    placeholder="+91 XXXXX XXXXX"
+                    value={addDriverForm.phoneNumber}
+                    onChange={(e) =>
+                      setAddDriverForm((p) => ({
+                        ...p,
+                        phoneNumber: e.target.value,
+                      }))
+                    }
+                    required
+                    className="bg-secondary border-border"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    Vehicle Type
+                  </Label>
+                  <Select
+                    value={addDriverForm.vehicleType}
+                    onValueChange={(v) =>
+                      setAddDriverForm((p) => ({ ...p, vehicleType: v }))
+                    }
+                    required
+                  >
+                    <SelectTrigger
+                      data-ocid="admin.add_driver.vehicle.select"
+                      className="bg-secondary border-border"
+                    >
+                      <SelectValue placeholder="Vehicle select karein" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-secondary border-border">
+                      {["Sedan", "SUV", "Auto", "Bike"].map((v) => (
+                        <SelectItem
+                          key={v}
+                          value={v}
+                          className="text-sm hover:bg-primary/20 focus:bg-primary/20"
+                        >
+                          {v}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button
+                  type="submit"
+                  data-ocid="admin.add_driver.submit_button"
+                  disabled={addDriverAsAdmin.isPending}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+                >
+                  {addDriverAsAdmin.isPending ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <UserPlus size={14} />
+                  )}
+                  {addDriverAsAdmin.isPending
+                    ? "Add ho raha hai..."
+                    : "Driver Add Karein"}
+                </Button>
+
+                {addDriverAsAdmin.isSuccess && (
+                  <div
+                    data-ocid="admin.add_driver.success_state"
+                    className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3"
+                  >
+                    <CheckCircle2 size={16} className="text-green-400" />
+                    <p className="text-sm text-green-400 font-medium">
+                      Driver successfully add ho gaya!
+                    </p>
+                  </div>
+                )}
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* List of admin-added drivers */}
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Users size={15} className="text-primary" />
+                Admin Dwara Add Kiye Gaye Drivers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {adminDriversLoading ? (
+                <div
+                  data-ocid="admin.added_drivers.loading_state"
+                  className="flex items-center justify-center py-10"
+                >
+                  <Loader2 size={20} className="animate-spin text-primary" />
+                </div>
+              ) : adminAddedDrivers.length === 0 ? (
+                <div
+                  data-ocid="admin.added_drivers.empty_state"
+                  className="text-center py-12 text-muted-foreground text-sm"
+                >
+                  <UserPlus size={36} className="mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">Abhi koi driver add nahi kiya</p>
+                  <p className="text-xs mt-1 opacity-60">
+                    Upar form se driver add karein
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-border hover:bg-transparent">
+                        <TableHead className="text-muted-foreground text-xs">
+                          Driver ID
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs">
+                          Naam
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs">
+                          Phone
+                        </TableHead>
+                        <TableHead className="text-muted-foreground text-xs">
+                          Vehicle
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody data-ocid="admin.added_drivers.table">
+                      {adminAddedDrivers.map((driver, idx) => (
+                        <TableRow
+                          key={driver.customDriverId}
+                          data-ocid={`admin.added_drivers.item.${idx + 1}`}
+                          className="border-border hover:bg-secondary/50"
+                        >
+                          <TableCell>
+                            <Badge className="bg-primary/15 text-primary border-primary/30 font-mono text-xs font-bold">
+                              {driver.customDriverId}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm font-medium text-foreground">
+                            {driver.name || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {driver.phoneNumber || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {driver.vehicleType || "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* TRIPS TAB */}
         <TabsContent value="trips" className="space-y-6 mt-4">
@@ -172,23 +603,43 @@ export function AdminPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label
-                      htmlFor="driverId"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Driver Principal ID
+                    <Label className="text-xs text-muted-foreground">
+                      Select Driver
                     </Label>
-                    <Input
-                      id="driverId"
-                      data-ocid="admin.driverid.input"
-                      placeholder="aaaaa-bbbbb-..."
+                    <Select
                       value={rideForm.driverId}
-                      onChange={(e) =>
-                        setRideForm((p) => ({ ...p, driverId: e.target.value }))
+                      onValueChange={(val) =>
+                        setRideForm((p) => ({ ...p, driverId: val }))
                       }
+                      disabled={driversLoading || driverOptions.length === 0}
                       required
-                      className="bg-secondary border-border font-mono text-xs"
-                    />
+                    >
+                      <SelectTrigger
+                        data-ocid="admin.driver.select"
+                        className="bg-secondary border-border"
+                      >
+                        <SelectValue
+                          placeholder={
+                            driversLoading
+                              ? "Loading drivers..."
+                              : driverOptions.length === 0
+                                ? "No drivers registered yet"
+                                : "Select a driver"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="bg-secondary border-border">
+                        {driverOptions.map((opt) => (
+                          <SelectItem
+                            key={opt.value}
+                            value={opt.value}
+                            className="text-sm hover:bg-primary/20 focus:bg-primary/20"
+                          >
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">
@@ -235,7 +686,10 @@ export function AdminPage() {
                       placeholder="e.g. Lajpat Nagar"
                       value={rideForm.dropArea}
                       onChange={(e) =>
-                        setRideForm((p) => ({ ...p, dropArea: e.target.value }))
+                        setRideForm((p) => ({
+                          ...p,
+                          dropArea: e.target.value,
+                        }))
                       }
                       required
                       className="bg-secondary border-border"
@@ -250,7 +704,10 @@ export function AdminPage() {
                       placeholder="e.g. New Delhi"
                       value={rideForm.dropCity}
                       onChange={(e) =>
-                        setRideForm((p) => ({ ...p, dropCity: e.target.value }))
+                        setRideForm((p) => ({
+                          ...p,
+                          dropCity: e.target.value,
+                        }))
                       }
                       required
                       className="bg-secondary border-border"
@@ -283,7 +740,10 @@ export function AdminPage() {
                       placeholder="e.g. 8.5"
                       value={rideForm.distance}
                       onChange={(e) =>
-                        setRideForm((p) => ({ ...p, distance: e.target.value }))
+                        setRideForm((p) => ({
+                          ...p,
+                          distance: e.target.value,
+                        }))
                       }
                       required
                       min="0"
@@ -295,7 +755,7 @@ export function AdminPage() {
                 <Button
                   type="submit"
                   data-ocid="admin.create_ride.submit_button"
-                  disabled={createRide.isPending}
+                  disabled={createRide.isPending || !rideForm.driverId}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   {createRide.isPending ? (
@@ -487,10 +947,18 @@ export function AdminPage() {
                           <TableCell>
                             <div className="flex items-center gap-1.5">
                               <div
-                                className={`w-1.5 h-1.5 rounded-full ${driver.isOnline ? "bg-green-500" : "bg-muted-foreground"}`}
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  driver.isOnline
+                                    ? "bg-green-500"
+                                    : "bg-muted-foreground"
+                                }`}
                               />
                               <span
-                                className={`text-xs font-medium ${driver.isOnline ? "text-green-500" : "text-muted-foreground"}`}
+                                className={`text-xs font-medium ${
+                                  driver.isOnline
+                                    ? "text-green-500"
+                                    : "text-muted-foreground"
+                                }`}
                               >
                                 {driver.isOnline ? "Online" : "Offline"}
                               </span>
@@ -518,23 +986,43 @@ export function AdminPage() {
             <CardContent>
               <form onSubmit={handleSendNotif} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label
-                    htmlFor="notif-driver"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Driver Principal ID
+                  <Label className="text-xs text-muted-foreground">
+                    Select Driver
                   </Label>
-                  <Input
-                    id="notif-driver"
-                    data-ocid="admin.notif_driver.input"
-                    placeholder="aaaaa-bbbbb-..."
+                  <Select
                     value={notifForm.driverId}
-                    onChange={(e) =>
-                      setNotifForm((p) => ({ ...p, driverId: e.target.value }))
+                    onValueChange={(val) =>
+                      setNotifForm((p) => ({ ...p, driverId: val }))
                     }
+                    disabled={driversLoading || driverOptions.length === 0}
                     required
-                    className="bg-secondary border-border font-mono text-xs"
-                  />
+                  >
+                    <SelectTrigger
+                      data-ocid="admin.notif_driver.select"
+                      className="bg-secondary border-border"
+                    >
+                      <SelectValue
+                        placeholder={
+                          driversLoading
+                            ? "Loading drivers..."
+                            : driverOptions.length === 0
+                              ? "No drivers registered yet"
+                              : "Select a driver"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent className="bg-secondary border-border">
+                      {driverOptions.map((opt) => (
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value}
+                          className="text-sm hover:bg-primary/20 focus:bg-primary/20"
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label
@@ -559,7 +1047,7 @@ export function AdminPage() {
                 <Button
                   type="submit"
                   data-ocid="admin.send_notif.submit_button"
-                  disabled={sendNotif.isPending}
+                  disabled={sendNotif.isPending || !notifForm.driverId}
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   {sendNotif.isPending ? (

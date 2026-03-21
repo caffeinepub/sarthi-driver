@@ -21,7 +21,9 @@ import {
 import {
   Car,
   CheckCircle2,
+  Clock,
   Edit2,
+  Hash,
   KeyRound,
   Loader2,
   Navigation,
@@ -31,11 +33,13 @@ import {
   Star,
   User,
   UserCog,
+  XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import type { DriverStatus } from "../hooks/useQueries";
 import {
   useClaimAdminRole,
   useCreateProfile,
@@ -43,6 +47,90 @@ import {
   useIsAdmin,
   useSaveProfile,
 } from "../hooks/useQueries";
+
+function RegistrationStatusBadge({
+  status,
+}: { status: DriverStatus | undefined }) {
+  if (!status) return null;
+
+  if ("pending" in status) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        data-ocid="profile.registration.panel"
+        className="flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4"
+      >
+        <Clock size={18} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-bold text-yellow-400">
+            Registration Pending
+          </p>
+          <p className="text-xs text-yellow-400/80 mt-0.5">
+            Admin Approval ka intezaar hai — aapki registration review ho rahi
+            hai
+          </p>
+        </div>
+        <Badge className="ml-auto bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] whitespace-nowrap flex-shrink-0">
+          Pending
+        </Badge>
+      </motion.div>
+    );
+  }
+
+  if ("approved" in status) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        data-ocid="profile.registration.panel"
+        className="flex items-start gap-3 rounded-xl border border-green-500/30 bg-green-500/10 p-4"
+      >
+        <CheckCircle2
+          size={18}
+          className="text-green-400 mt-0.5 flex-shrink-0"
+        />
+        <div>
+          <p className="text-sm font-bold text-green-400">
+            Registration Approved
+          </p>
+          <p className="text-xs text-green-400/80 mt-0.5">
+            Aap active driver hain — aapka account fully verified hai
+          </p>
+        </div>
+        <Badge className="ml-auto bg-green-500/20 text-green-400 border-green-500/30 text-[10px] whitespace-nowrap flex-shrink-0">
+          Active
+        </Badge>
+      </motion.div>
+    );
+  }
+
+  if ("rejected" in status) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        data-ocid="profile.registration.panel"
+        className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4"
+      >
+        <XCircle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-bold text-red-400">
+            Registration Rejected
+          </p>
+          <p className="text-xs text-red-400/80 mt-0.5">
+            Admin se sampark karein — aapki registration manzoor nahi hui
+          </p>
+        </div>
+        <Badge className="ml-auto bg-red-500/20 text-red-400 border-red-500/30 text-[10px] whitespace-nowrap flex-shrink-0">
+          Rejected
+        </Badge>
+      </motion.div>
+    );
+  }
+
+  return null;
+}
 
 export function ProfilePage() {
   const { data: profile } = useGetProfile();
@@ -67,6 +155,7 @@ export function ProfilePage() {
       saveProfile.mutate(
         {
           ...profile,
+          status: profile.status ?? { pending: null },
           name: form.name,
           phoneNumber: form.phoneNumber,
           vehicleType: form.vehicleType,
@@ -98,7 +187,10 @@ export function ProfilePage() {
         setAdminCode("");
         setTimeout(() => window.location.reload(), 1200);
       },
-      onError: () => toast.error("Invalid admin code. Please try again."),
+      onError: (e: unknown) =>
+        toast.error(
+          e instanceof Error ? e.message : "Wrong password. Please try again.",
+        ),
     });
   };
 
@@ -114,6 +206,8 @@ export function ProfilePage() {
     : "DR";
 
   const isSaving = saveProfile.isPending || createProfile.isPending;
+
+  const customDriverId = profile?.customDriverId;
 
   const achievements = [
     { label: "5-Star Rides", value: "89", icon: "⭐" },
@@ -134,6 +228,31 @@ export function ProfilePage() {
           Manage your driver account and vehicle details
         </p>
       </motion.div>
+
+      {/* SARTHI Driver ID Badge */}
+      {customDriverId && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          data-ocid="profile.driver_id.card"
+          className="mb-6 rounded-2xl border border-primary/40 bg-gradient-to-r from-primary/15 to-primary/5 p-4 flex items-center gap-4"
+        >
+          <div className="w-12 h-12 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
+            <Hash size={22} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium mb-0.5">
+              Sarthi Driver ID
+            </p>
+            <p className="text-2xl font-extrabold text-primary tracking-wider font-mono">
+              {customDriverId}
+            </p>
+          </div>
+          <Badge className="bg-primary/20 text-primary border-primary/30 text-xs px-3 py-1">
+            Verified
+          </Badge>
+        </motion.div>
+      )}
 
       {/* Setup prompt for new users */}
       {!hasProfile && (
@@ -163,6 +282,17 @@ export function ProfilePage() {
         </motion.div>
       )}
 
+      {/* Registration status banner */}
+      {hasProfile && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <RegistrationStatusBadge status={profile?.status} />
+        </motion.div>
+      )}
+
       <div className="grid md:grid-cols-[320px_1fr] gap-6">
         {/* Left: avatar card */}
         <div className="space-y-4">
@@ -187,6 +317,15 @@ export function ProfilePage() {
                 ? `${profile.vehicleType} Driver`
                 : "Driver"}
             </p>
+
+            {/* Driver ID in avatar card if present */}
+            {customDriverId && (
+              <div className="mt-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-xs font-bold text-primary tracking-wider font-mono">
+                  {customDriverId}
+                </p>
+              </div>
+            )}
 
             {/* Rating -- only show if profile has a rating */}
             {profile?.rating != null && profile.rating > 0 && (
@@ -492,7 +631,7 @@ export function ProfilePage() {
               <Shield size={18} className="text-primary" /> Enter Admin Code
             </DialogTitle>
             <DialogDescription>
-              Enter the secret admin code to unlock the Admin Panel.
+              Enter the admin password to unlock the Admin Panel.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -502,7 +641,7 @@ export function ProfilePage() {
             <Input
               data-ocid="profile.input"
               type="password"
-              placeholder="Enter secret code..."
+              placeholder="Enter admin password"
               value={adminCode}
               onChange={(e) => setAdminCode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleClaimAdmin()}
